@@ -41,7 +41,9 @@ import kotlin.coroutines.suspendCoroutine
 private lateinit var bitmapBuffer: Bitmap
 
 
-
+var sum = 0L
+var time = 0L
+var test = false
 @Composable
 fun CameraScreen() {
     // Obtain the current context and lifecycle owner
@@ -110,9 +112,17 @@ fun CameraScreen() {
             Log.d("CS330", "GPU too slow, switching to CPU start")
             // TODO:
             //  Create new classifier to be run on CPU with 2 threads
+            val personClassifierCPU = PersonClassifier()
+            personClassifierCPU.initialize(context, useGPU = false)
+            personClassifierCPU.setDetectorListener(listener)
 
             // TODO:
             //  Set imageAnalyzer to use the new classifier
+            imageAnalyzer.setAnalyzer(cameraExecutor) { image ->
+                detectObjects(image, personClassifierCPU)
+                // Close the image proxy
+                image.close()
+            }
 
             Log.d("CS330", "GPU too slow, switching to CPU done")
         }
@@ -123,8 +133,34 @@ fun CameraScreen() {
     Text(buildAnnotatedString {
             if (detectionResults.value != null) {
                 val detectionResult = detectionResults.value!!
+
+                if(detectionResult.inferenceTime > 200)
+                    when(test){
+                        true -> {}
+                        false -> {
+                            sum = 0
+                            time = 0
+                            test = true
+                        }
+                    }
+                else
+                    when(test){
+                        false -> {}
+                        true -> {
+                            sum = 0
+                            time = 0
+                            test = false
+                        }
+                    }
+
+                time ++
+                sum += detectionResult.inferenceTime
+
                 withStyle(style = SpanStyle(color = Color.Blue, fontSize = 20.sp)) {
                     append("inference time ${detectionResult.inferenceTime}\n")
+                }
+                withStyle(style = SpanStyle(color = Color.Blue, fontSize = 20.sp)) {
+                    append("average ${sum / time}\n")
                 }
                 if (detectionResult.detections.find { it.categories[0].label == "person" } != null) {
                     withStyle(style = SpanStyle(color = Color.Red, fontSize = 40.sp)) {
